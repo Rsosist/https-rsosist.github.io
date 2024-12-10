@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>부산 관광명소</title>
+    <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=c5b520312bc2eac24ce4aaa9d5ce19d8&libraries=services,traffic"></script>
+    <style>
+        #infoBox {
+            position: fixed;
+            right: 10px;
+            top: 50px;
+            width: 300px;
+            border: 1px solid #ddd;
+            background: #fff;
+            padding: 10px;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            overflow: hidden;
+            z-index: 1000;
+        }
+        #infoBox img {
+            max-width: 100%;
+            height: auto;
+            margin-bottom: 10px;
+        }
+        .button-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 10px;
+            position: relative;
+        }
+        .button {
+            cursor: pointer;
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            text-align: center;
+            flex: 1;
+            margin: 0 5px;
+            box-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+        }
+        .popup {
+            position: absolute;
+            top: -110px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            background: white;
+            border: 1px solid #ccc;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            padding: 10px;
+            display: none;
+            z-index: 1100;
+        }
+        #trafficToggle {
+            position: absolute;
+            bottom:60px;
+            left: 20px;
+            background-color: red;
+            color: white;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1100;
+            box-shadow: 1px 1px 5px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <h1>부산 관광명소</h1>
+    <div id="map" style="width:80%;height:700px;"></div>
+    <div id="infoBox" style="display:none;"></div>
+    <div id="trafficToggle">T</div>
+
+    <script>
+        var mapContainer = document.getElementById('map');
+        var mapOption = {
+            center: new kakao.maps.LatLng(35.1795543, 129.0756416),
+            level: 5
+        };
+
+        var map = new kakao.maps.Map(mapContainer, mapOption);
+
+        var trafficEnabled = false;
+        var trafficToggle = document.getElementById('trafficToggle');
+
+        trafficToggle.addEventListener('click', function () {
+            if (trafficEnabled) {
+                map.removeOverlayMapTypeId(kakao.maps.MapTypeId.TRAFFIC);
+                trafficToggle.style.backgroundColor = 'red';
+                trafficToggle.textContent = 'T';
+                trafficEnabled = false;
+            } else {
+                map.addOverlayMapTypeId(kakao.maps.MapTypeId.TRAFFIC);
+                trafficToggle.style.backgroundColor = 'green';
+                trafficToggle.textContent = 'T';
+                trafficEnabled = true;
+            }
+        });
+
+        var infoBox = document.getElementById('infoBox');
+
+        var restaurantMarkers = [];
+
+        function closeOtherPopups() {
+            document.querySelectorAll('.popup').forEach(popup => {
+                popup.style.display = 'none';
+            });
+        }
+
+        function togglePopup(popup, content) {
+            if (popup.style.display === 'block') {
+                popup.style.display = 'none';
+            } else {
+                closeOtherPopups();
+                popup.textContent = content;
+                popup.style.display = 'block';
+            }
+        }
+
+        fetch('https://apis.data.go.kr/6260000/AttractionService/getAttractionKr?serviceKey=hMOuwtv2Vj646AaKW3V0XKOUFhlhVCBpDAZDOMfJZbcOtNZQqO4Qw9eZlg9iks9QQGylGDVaoIkBmGOYZYORbQ%3D%3D&pageNo=1&numOfRows=200&resultType=json')
+            .then(response => response.json())
+            .then(data => {
+                if (data.getAttractionKr && data.getAttractionKr.header.code === "00") {
+                    data.getAttractionKr.item.forEach(item => {
+                        if (item.LAT && item.LNG) {
+                            var markerPosition = new kakao.maps.LatLng(item.LAT, item.LNG);
+                            var marker = new kakao.maps.Marker({
+                                position: markerPosition,
+                                map: map,
+                                image: new kakao.maps.MarkerImage(
+                                    'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
+                                    new kakao.maps.Size(24, 35)
+                                )
+                            });
+
+                            kakao.maps.event.addListener(marker, 'click', function() {
+                                infoBox.style.display = 'block';
+                                infoBox.innerHTML = '';
+                                infoBox.appendChild(createInfoContent(item));
+                            });
+
+                            var infowindow = new kakao.maps.InfoWindow({
+                                content: `
+                                    <div style="padding:5px; width:250px; white-space:normal; word-wrap:break-word;">
+                                        <strong>${item.PLACE}</strong><br>
+                                        주소: ${item.ADDR1 || 'N/A'}<br>
+                                        연락처: ${item.CNTCT_TEL || 'N/A'}
+                                    </div>`
+                            });
+
+                            kakao.maps.event.addListener(marker, 'mouseover', function() {
+                                infowindow.open(map, marker);
+                            });
+
+                            kakao.maps.event.addListener(marker, 'mouseout', function() {
+                                infowindow.close();
+                            });
+                        } else {
+                            console.warn('Missing coordinates for:', item);
+                        }
+                    });
+                } else {
+                    console.error('API Error: Unexpected response structure or code');
+                }
+            })
+            .catch(error => {
+                console.error('Fetch Error:', error);
+            });
+
+        function createInfoContent(item) {
+            var content = document.createElement('div');
+
+            var img = document.createElement('img');
+            img.src = item.MAIN_IMG_THUMB || '';
+            img.alt = 'Thumbnail';
+            content.appendChild(img);
+
+            var title = document.createElement('h2');
+            title.textContent = item.PLACE;
+            content.appendChild(title);
+
+            if (item.USAGE_DAY) {
+                var usage = document.createElement('p');
+                usage.innerHTML = `<strong>운영일:</strong> ${item.USAGE_DAY}`;
+                content.appendChild(usage);
+            }
+
+            if (item.HLDY_INFO) {
+                var holiday = document.createElement('p');
+                holiday.innerHTML = `<strong>휴무일:</strong> ${item.HLDY_INFO}`;
+                content.appendChild(holiday);
+            }
+
+            if (item.USAGE_DAY_WEEK_AND_TIME) {
+                var time = document.createElement('p');
+                time.innerHTML = `<strong>운영 시간:</strong> ${item.USAGE_DAY_WEEK_AND_TIME}`;
+                content.appendChild(time);
+            }
+
+            if (item.ADDR1) {
+                var address = document.createElement('p');
+                address.innerHTML = `<strong>주소:</strong> ${item.ADDR1} <a href="https://map.kakao.com/link/to/${item.PLACE},${item.LAT},${item.LNG}" target="_blank">길찾기</a>`;
+                content.appendChild(address);
+            }
+
+            if (item.HOMEPAGE_URL) {
+                var homepage = document.createElement('p');
+                homepage.innerHTML = `<strong>홈페이지:</strong> <a href="${item.HOMEPAGE_URL}" target="_blank" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; display: inline-block; max-width: 200px;">${item.HOMEPAGE_URL}</a>`;
+                content.appendChild(homepage);
+            }
+
+            var buttonContainer = document.createElement('div');
+            buttonContainer.classList.add('button-container');
+
+            var facilityButton = document.createElement('div');
+            facilityButton.classList.add('button');
+            facilityButton.textContent = '편의시설';
+            var facilityPopup = document.createElement('div');
+            facilityPopup.classList.add('popup');
+            facilityPopup.textContent = item.MIDDLE_SIZE_RM1 || '편의시설 정보가 없습니다.';
+            facilityButton.appendChild(facilityPopup);
+            facilityButton.onclick = function () {
+                togglePopup(facilityPopup, item.MIDDLE_SIZE_RM1 || '편의시설 정보가 없습니다.');
+            };
+            buttonContainer.appendChild(facilityButton);
+
+            var trafficButton = document.createElement('div');
+            trafficButton.classList.add('button');
+            trafficButton.textContent = '교통정보';
+            var trafficPopup = document.createElement('div');
+            trafficPopup.classList.add('popup');
+            trafficPopup.textContent = item.TRFC_INFO || '교통정보가 없습니다.';
+            trafficButton.appendChild(trafficPopup);
+            trafficButton.onclick = function () {
+                togglePopup(trafficPopup, item.TRFC_INFO || '교통정보가 없습니다.');
+            };
+            buttonContainer.appendChild(trafficButton);
+
+            var restaurantButton = document.createElement('div');
+            restaurantButton.classList.add('button');
+            restaurantButton.textContent = '근처 식당 표시';
+            restaurantButton.onclick = function () {
+                clearRestaurantMarkers();
+                showNearbyRestaurants(item.LAT, item.LNG);
+            };
+            buttonContainer.appendChild(restaurantButton);
+
+            content.appendChild(buttonContainer);
+
+            return content;
+        }
+
+        function showNearbyRestaurants(lat, lng) {
+            fetch('https://apis.data.go.kr/6260000/BusanTblFnrstrnStusService/getTblFnrstrnStusInfo?serviceKey=hMOuwtv2Vj646AaKW3V0XKOUFhlhVCBpDAZDOMfJZbcOtNZQqO4Qw9eZlg9iks9QQGylGDVaoIkBmGOYZYORbQ%3D%3D&pageNo=1&numOfRows=290&resultType=json')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.response && data.response.body.items.item) {
+                        data.response.body.items.item.forEach(restaurant => {
+                            var restaurantLat = parseFloat(restaurant.lat);
+                            var restaurantLng = parseFloat(restaurant.lng);
+                            var distance = calculateDistance(lat, lng, restaurantLat, restaurantLng);
+                            if (distance <= 1.5) {
+                                var position = new kakao.maps.LatLng(restaurantLat, restaurantLng);
+                                var restaurantMarker = new kakao.maps.Marker({
+                                    position: position,
+                                    map: map,
+                                    image: new kakao.maps.MarkerImage(
+                                        'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/marker_red.png',
+                                        new kakao.maps.Size(24, 35)
+                                    )
+                                });
+
+                                restaurantMarkers.push(restaurantMarker);
+
+                                var infoContent = `
+                                    <div style="padding:5px; width:200px; white-space:normal; word-wrap:break-word;">
+                                        <strong>${restaurant.bsnsNm}</strong><br>
+                                        주소: ${restaurant.addrRoad || 'N/A'}<br>
+                                        전화번호: ${restaurant.tel || 'N/A'}<br>
+                                        메뉴: ${restaurant.menu || 'N/A'}
+                                    </div>`;
+
+                                var restaurantInfoWindow = new kakao.maps.InfoWindow({
+                                    content: infoContent
+                                });
+
+                                kakao.maps.event.addListener(restaurantMarker, 'mouseover', function() {
+                                    restaurantInfoWindow.open(map, restaurantMarker);
+                                });
+
+                                kakao.maps.event.addListener(restaurantMarker, 'mouseout', function() {
+                                    restaurantInfoWindow.close();
+                                });
+                            }
+                        });
+                    } else {
+                        console.error('API Error: Unexpected response structure or code');
+                    }
+                })
+                .catch(error => {
+                    console.error('Fetch Error:', error);
+                });
+        }
+
+        function clearRestaurantMarkers() {
+            restaurantMarkers.forEach(marker => {
+                marker.setMap(null);
+            });
+            restaurantMarkers = [];
+        }
+
+        function calculateDistance(lat1, lng1, lat2, lng2) {
+            function toRad(value) {
+                return value * Math.PI / 180;
+            }
+
+            var R = 6371; // Radius of the Earth in km
+            var dLat = toRad(lat2 - lat1);
+            var dLng = toRad(lng2 - lng1);
+            var a = 
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * 
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            var distance = R * c;
+            return distance;
+        }
+    </script>
+</body>
+</html>
